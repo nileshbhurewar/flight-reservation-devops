@@ -1,0 +1,3 @@
+[submodule "infra"]
+	path = infra
+	url = https://github.com/nileshbhurewar/flight-reservation-system-infra.git
