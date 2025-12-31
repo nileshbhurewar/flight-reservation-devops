@@ -208,3 +208,70 @@
       async: 10
       poll: 0
 
+
+    # =====================================================
+    # MONITORING: HELM + PROMETHEUS + GRAFANA
+    # =====================================================
+
+    # -------------------------
+    # Helm
+    # -------------------------
+    - name: Check if Helm is installed
+      command: helm version
+      register: helm_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install Helm if missing
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      when: helm_check.rc != 0
+
+    - name: Verify Helm installation
+      command: helm version
+      changed_when: false
+
+    # -------------------------
+    # Configure kubeconfig for EKS
+    # -------------------------
+    - name: Configure kubeconfig for EKS
+      command: >
+        aws eks update-kubeconfig
+        --region {{ eks_region }}
+        --name {{ eks_cluster_name }}
+      environment:
+        HOME: /root
+
+    - name: Verify EKS connectivity
+      command: kubectl get nodes
+      changed_when: false
+
+    # -------------------------
+    # Monitoring namespace
+    # -------------------------
+    - name: Create monitoring namespace
+      command: kubectl create namespace {{ monitoring_namespace }}
+      register: monitoring_ns
+      failed_when: false
+      changed_when: "'created' in monitoring_ns.stdout"
+
+    # -------------------------
+    # Prometheus Helm repo
+    # -------------------------
+    - name: Add Prometheus Helm repository
+      command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      failed_when: false
+      changed_when: false
+
+    - name: Update Helm repositories
+      command: helm repo update
+      changed_when: false
+
+    # -------------------------
+    # Install Prometheus + Grafana
+    # -------------------------
+    - name: Install Prometheus & Grafana (kube-prometheus-stack)
+      command: >
+        helm upgrade --install {{ helm_release_name }}
+        prometheus-community/kube-prometheus-stack
+        -n {{ monitoring_namespace }}
