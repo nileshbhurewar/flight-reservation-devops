@@ -1,0 +1,75 @@
+/*
+1)- Used dir() Instead of cd
+2)- AWS Credentials Binding
+3)- --delete Option Added
+4)-Workspace Cleanup
+5)- Using CloudFront
+
+*/
+
+
+pipeline {
+    agent any
+
+    environment {
+        S3_BUCKET = "cbz-frontend-project-bux3322"
+        AWS_REGION = "ap-south-1"
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main', 
+                    url: 'https://github.com/nileshbhurewar/Flight-reservation.git'
+            }
+        }
+
+        stage('Install Dependencies & Build') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        npm install
+                        npm run build
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to S3') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials'
+                ]]) {
+                    dir('frontend') {
+                        sh '''
+                            aws s3 sync dist/ s3://$S3_BUCKET/ --delete
+                        '''
+                    }
+                }
+            }
+        }
+          stage('Invalidate CloudFront Cache') {
+            steps {
+                sh '''
+                    aws cloudfront create-invalidation \
+                    --distribution-id YOUR_DISTRIBUTION_ID \
+                    --paths "/*"
+                '''
+          }
+}
+    }
+
+    post {
+        success {
+            echo "Frontend deployed successfully to S3"
+        }
+        failure {
+            echo "Frontend deployment failed"
+        }
+        always {
+            cleanWs()
+        }
+    }
+}
